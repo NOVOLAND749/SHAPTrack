@@ -33,10 +33,10 @@ cv() {          # leakage tests + small end-to-end run, then nested CV for k
     run smoke_test $PY -u scripts/smoke_test.py
     run nested_cv $PY scripts/run_nested_cv.py
 }
-splits() {      # 20 train/test splits: genomics-only and joint models, SHAP; v1 (pre-specified) and v2 (primary) models
+splits() {      # 20 train/test splits: genomics-only and joint models, SHAP; pre-specified and main models
     set -- $NSEED
-    run splits_v1 $PY scripts/run_splits.py --seeds $(seq "$1" "$2")
-    run splits_v2 $PY scripts/run_splits.py --version v2 --seeds $(seq "$1" "$2")
+    run splits_prespecified $PY scripts/run_splits.py --models prespecified --seeds $(seq "$1" "$2")
+    run splits_main $PY scripts/run_splits.py --models main --seeds $(seq "$1" "$2")
 }
 downstream() {  # labels and OLS follow-up analyses reported in the manuscript
     run anchor_mediation $PY scripts/anchor_mediation.py
@@ -49,7 +49,7 @@ downstream() {  # labels and OLS follow-up analyses reported in the manuscript
 }
 figures() {     # Figures 2-3 and Supplementary Table S1
     mkdir -p figures tables
-    run figures $PY scripts/make_figures.py "$RES" figures "$RES/v2/anchor_mediation/full.csv"
+    run figures $PY scripts/make_figures.py "$RES" figures "$RES/main/anchor_mediation/full.csv"
     run supp_table_s1 $PY scripts/make_supp_table_s1.py "$RES" tables/Supplementary_Table_S1.csv
 }
 

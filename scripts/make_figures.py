@@ -1,5 +1,5 @@
-"""Manuscript Figures 2-3 from <results_dir> (v2 models, share-based labels). Reads saved results only.
-Usage: python scripts/make_figures.py <results_dir> <out_dir> <results_dir>/v2/anchor_mediation/full.csv
+"""Manuscript Figures 2-3 from <results_dir> (main models, share-based labels). Reads saved results only.
+Usage: python scripts/make_figures.py <results_dir> <out_dir> <results_dir>/main/anchor_mediation/full.csv
 """
 import sys, glob, json
 import numpy as np, pandas as pd
@@ -29,11 +29,11 @@ def label(f):
 
 # per-split importances
 G, J = [], []
-for d in sorted(glob.glob(f'{R}/v2/splits/seed_*')):
+for d in sorted(glob.glob(f'{R}/main/splits/seed_*')):
     G.append(pd.read_csv(d + '/imp_genomics.csv').set_index('feature').mean_abs_shap)
     J.append(pd.read_csv(d + '/imp_joint.csv').set_index('feature').mean_abs_shap)
 Gm = pd.concat(G, axis=1); Jm = pd.concat(J, axis=1)
-jtype = pd.read_csv(sorted(glob.glob(f'{R}/v2/splits/seed_*'))[0] + '/imp_joint.csv').set_index('feature').type
+jtype = pd.read_csv(sorted(glob.glob(f'{R}/main/splits/seed_*'))[0] + '/imp_joint.csv').set_index('feature').type
 
 # ---------- Figure 2 ----------
 fig = plt.figure(figsize=(7.2, 7.6))
@@ -66,7 +66,7 @@ axC.legend(handles=[Patch(color=BLUE, label='Metabolite'), Patch(color=ORANGE, l
 fig.savefig(f'{OUT}/figure2.pdf', bbox_inches='tight'); fig.savefig(f'{OUT}/figure2.png', dpi=300, bbox_inches='tight'); plt.close(fig)
 
 # ---------- Figure 3 ----------
-t = pd.read_csv(f'{R}/v6/v2/snp_table.csv'); a = t[(t.glgc_label == 'anchor') & t.eligible].copy()
+t = pd.read_csv(f'{R}/labels/main/snp_table.csv'); a = t[(t.glgc_label == 'anchor') & t.eligible].copy()
 # mean genomics importance over the splits in which the SNP was selected
 a['imp_g'] = [Gm.loc[f].dropna().mean() if f in Gm.index else np.nan for f in a.feature]
 a['imp_g'] = a.imp_g.clip(lower=1e-5)
@@ -75,7 +75,7 @@ print('imp_g min', a.imp_g.min(), 'n ratio clipped', (a.mean_S / (1 - a.mean_S) 
 fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(7.2, 3.4), gridspec_kw=dict(width_ratios=[1.7, 1], wspace=0.5))
 colmap = {'losing': BLUE, 'gaining': ORANGE, 'none': GRAY}
 for lab, z in [('none', 1), ('losing', 2), ('gaining', 3)]:
-    s = a[a.v6_label == lab]
+    s = a[a['label'] == lab]
     ax1.scatter(s.imp_g, s.ratio, s=22, c=colmap[lab], edgecolors='white', linewidths=0.8, zorder=z,
                 label={'none': 'Not classified', 'losing': 'Losing', 'gaining': 'Gaining'}[lab] + f' (n = {len(s)})')
 ax1.set_xscale('log'); ax1.set_yscale('log')
@@ -107,7 +107,7 @@ ax1.legend(frameon=False, fontsize=6.8, loc='upper center', bbox_to_anchor=(0.5,
 ax1.text(-0.12, 1.03, 'A', transform=ax1.transAxes, fontweight='bold', fontsize=10)
 order = ['losing', 'none', 'gaining']; rng = np.random.default_rng(1)
 for i, lab in enumerate(order):
-    v = a[a.v6_label == lab].v3_prop_mediated.dropna().values
+    v = a[a['label'] == lab]['score_prop_mediated'].dropna().values
     ax2.scatter(i + rng.uniform(-0.15, 0.15, len(v)), v, s=16, c=colmap[lab], edgecolors='white', linewidths=0.6, zorder=2)
     ax2.hlines(np.median(v), i - 0.28, i + 0.28, color=INK, lw=1.6, zorder=3)
 ax2.set_xticks(range(3)); ax2.set_xticklabels(['Losing', 'Not\nclassified', 'Gaining'])
@@ -115,4 +115,4 @@ ax2.set_ylabel('Proportion mediated (metabolome score)'); ax2.grid(axis='y', col
 ax2.text(-0.22, 1.03, 'B', transform=ax2.transAxes, fontweight='bold', fontsize=10)
 fig.savefig(f'{OUT}/figure3.pdf', bbox_inches='tight'); fig.savefig(f'{OUT}/figure3.png', dpi=300, bbox_inches='tight'); plt.close(fig)
 print('genomics top20:', [label(f) for f in gtop]); print('joint top20:', [label(f) for f in jtop])
-print('anchors plotted', len(a), a.v6_label.value_counts().to_dict(), 'imp_g NaN', a.imp_g.isna().sum())
+print('anchors plotted', len(a), a['label'].value_counts().to_dict(), 'imp_g NaN', a.imp_g.isna().sum())

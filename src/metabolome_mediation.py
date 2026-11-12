@@ -1,4 +1,4 @@
-"""Post hoc v3: cross-fitted metabolome LDL score and a genome-wide SNP -> score -> LDL-C mediation screen.
+"""Cross-fitted metabolome LDL score and a genome-wide SNP -> score -> LDL-C mediation screen.
 
 Per SNP (covariates C in every model, exact OLS via Frisch-Waugh-Lovell):
   total   LDL   ~ 1 + C + SNP          -> c
@@ -69,22 +69,22 @@ def scan(G, y, m, C, chunk=5000):
 
 
 def classify(res, cfg):
-    v3 = cfg["metabolome_v3"]
+    ms = cfg["metabolome_score"]
     out = res.copy()
     out["q_c"] = multipletests(out["p_c"], method="fdr_bh")[1]
-    out["entered"] = out["q_c"] < v3["total_effect_fdr"]
+    out["entered"] = out["q_c"] < ms["total_effect_fdr"]
     n_entered = int(out["entered"].sum())
     thr = cfg["downstream"]["alpha"] / max(n_entered, 1)
     sig = out["entered"] & (out["sobel_p"] < thr)
     same = np.sign(out["indirect"]) == np.sign(out["c_total"])
     unmask = (np.sign(out["indirect"]) != np.sign(out["c_direct"])) & (out["c_direct"].abs() > out["c_total"].abs())
-    out["losing"] = sig & same & (out["prop_mediated"] >= v3["losing_min_prop_mediated"])
-    for p in v3["losing_sensitivity_prop"]:
+    out["losing"] = sig & same & (out["prop_mediated"] >= ms["losing_min_prop_mediated"])
+    for p in ms["losing_sensitivity_prop"]:
         out[f"losing_prop{p}"] = sig & same & (out["prop_mediated"] >= p)
     out["gaining"] = sig & unmask
     out["gaining_secondary"] = (out["sobel_p"] < cfg["downstream"]["alpha"] / len(out)) & unmask
     stats_ = {"n_snps": len(out), "n_entered": n_entered, "sobel_threshold": thr,
               "n_indirect_sig": int(sig.sum()), "n_losing": int(out["losing"].sum()),
               "n_gaining": int(out["gaining"].sum()), "n_gaining_secondary": int(out["gaining_secondary"].sum())}
-    stats_.update({f"n_losing_prop{p}": int(out[f"losing_prop{p}"].sum()) for p in v3["losing_sensitivity_prop"]})
+    stats_.update({f"n_losing_prop{p}": int(out[f"losing_prop{p}"].sum()) for p in ms["losing_sensitivity_prop"]})
     return out, stats_

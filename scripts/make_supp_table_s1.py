@@ -1,5 +1,5 @@
 """Supplementary Table S1: importance dynamics, total effect and mediation for every eligible SNP
-(79 established GLGC SNPs + 53 suggestive SNPs; v6 rule, v2 models).
+(79 established GLGC SNPs + 53 suggestive SNPs; share-based labels, main models).
 
 Usage: python make_supp_table_s1.py <results_dir> <output csv>
 """
@@ -9,13 +9,13 @@ import pandas as pd
 
 RES, OUT = sys.argv[1:3]
 
-st = pd.read_csv(f'{RES}/v6/v2/snp_table.csv')
+st = pd.read_csv(f'{RES}/labels/main/snp_table.csv')
 st = st[st.eligible == True].copy()
 
 cols = ['snp', 'metabolite', 'c_total', 'se_c_total', 'p_c_total', 'c_direct', 'indirect', 'sobel_p',
         'prop_mediated', 'bonferroni_sig', 'CHEMICAL_NAME', 'SUB_PATHWAY', 'glgc_pvalue_neg_log10_GC']
 med = []
-for path in (f'{RES}/v2/anchor_mediation/full.csv', f'{RES}/v6/candidate_mediation/full.csv'):
+for path in (f'{RES}/main/anchor_mediation/full.csv', f'{RES}/labels/candidate_mediation/full.csv'):
     for chunk in pd.read_csv(path, usecols=cols, chunksize=500_000):
         med.append(chunk[chunk.snp.isin(st.feature)])
 med = pd.concat(med).drop_duplicates(['snp', 'metabolite'])
@@ -50,7 +50,7 @@ out = st.merge(m, on='feature', how='left')
 out['glgc_category'] = out.set.map({'primary': 'established (p < 5e-8)', 'secondary': 'suggestive (5e-8 <= p < 0.05)'})
 out['z_c_total'] = out.c_total_mgdl.abs() / out.se_c_total
 out['retention'] = out.ratio_mean_S
-out['class'] = out.v6_label
+out['class'] = out['label']
 
 # order: established first; losing, gaining, unclassified; losing/none by retention ascending, gaining descending
 out['_p'] = out.set.map({'primary': 0, 'secondary': 1})

@@ -4,9 +4,9 @@ Interaction model = Step 6b (src/interaction.scan): LDL ~ 1 + SNP + covariates +
 transformed as config downstream.metabolite_transform; one scan per SNP (the scan does not depend on the split, only the SNP
 list does). Per SNP: top interaction (smallest p), per-SNP Bonferroni count (alpha / bonferroni_per_snp), BH q over every
 SNP x metabolite test of this scan (the global q reported in the Discussion), best lipid-lowering-drug metabolite term. Per split: S = I_joint / (I_joint + I_genomics)
-and the v6 split label (posthoc_v6 thresholds), joined to the SNP's top interaction.
+and the share-based split label (share_labels thresholds), joined to the SNP's top interaction.
 
-Writes <results_dir>/<v2 subdir>/split_interaction/{per_snp_top_interaction.csv, per_split_top_interaction.csv,
+Writes <results_dir>/main/split_interaction/{per_snp_top_interaction.csv, per_split_top_interaction.csv,
 per_split_summary.csv, pvalues.npz, summary.json}.
 Usage (from the repository root): python scripts/global_interaction_scan.py [--jobs 48]
 """
@@ -54,23 +54,23 @@ def main():
     setup_logging()
     t0 = time.time()
     cfg = load_config()
-    ds, v6 = cfg["downstream"], cfg["posthoc_v6"]
+    ds, sl = cfg["downstream"], cfg["share_labels"]
     base = Path(cfg["paths"]["results_dir"])
-    v2 = base / cfg["posthoc_v2"]["results_subdir"]
-    out = v2 / "split_interaction"
+    main = base / cfg["main_models"]["results_subdir"]
+    out = main / "split_interaction"
     out.mkdir(parents=True, exist_ok=True)
 
     dyn = []
-    for d in sorted((v2 / "splits").glob("seed_*")):
+    for d in sorted((main / "splits").glob("seed_*")):
         x = pd.read_csv(d / "dynamics.csv")
         sel = pd.read_csv(d / "selected_snps.txt", header=None)[0]
         assert set(x["feature"]) == set(sel), d
         tot = x["shap_joint"] + x["shap_genomics"]
         x["S"] = (x["shap_joint"] / tot).where(tot > 0)
-        x["split_label_v6"] = np.where(x["S"] < v6["losing_max_share"], "losing",
-                                       np.where(x["S"] > v6["gaining_min_share"], "gaining", "none"))
-        x.loc[x["S"].isna(), "split_label_v6"] = "undefined"
-        dyn.append(x[["feature", "shap_genomics", "shap_joint", "rank_genomics", "rank_joint", "S", "split_label_v6"]]
+        x["split_label"] = np.where(x["S"] < sl["losing_max_share"], "losing",
+                                       np.where(x["S"] > sl["gaining_min_share"], "gaining", "none"))
+        x.loc[x["S"].isna(), "split_label"] = "undefined"
+        dyn.append(x[["feature", "shap_genomics", "shap_joint", "rank_genomics", "rank_joint", "S", "split_label"]]
                    .assign(seed=int(d.name.split("_")[1])))
     dyn = pd.concat(dyn, ignore_index=True)
     snps_all = sorted(dyn["feature"].unique())
@@ -128,16 +128,16 @@ def main():
                         metabolites=np.array(testable.astype(str)))
 
     per_split = dyn.merge(per_snp.drop(columns=["n_selected"]), left_on="feature", right_on="snp").drop(columns="snp")
-    per_split = per_split.sort_values(["seed", "split_label_v6", "top_p"])
+    per_split = per_split.sort_values(["seed", "split_label", "top_p"])
     per_split.to_csv(out / "per_split_top_interaction.csv", index=False)
 
     rows = []
     for s, g in per_split.groupby("seed"):
-        gain = g["split_label_v6"] == "gaining"
+        gain = g["split_label"] == "gaining"
         hit = g["top_bonferroni_sig"]
         tab = [[int((gain & hit).sum()), int((gain & ~hit).sum())], [int((~gain & hit).sum()), int((~gain & ~hit).sum())]]
         odds, fp = stats.fisher_exact(tab)
-        rows.append({"seed": s, "n_snps": len(g), "n_gaining": int(gain.sum()), "n_losing": int((g["split_label_v6"] == "losing").sum()),
+        rows.append({"seed": s, "n_snps": len(g), "n_gaining": int(gain.sum()), "n_losing": int((g["split_label"] == "losing").sum()),
                      "gaining_with_bonf_hit": tab[0][0], "other_with_bonf_hit": tab[1][0],
                      "share_gaining_bonf": tab[0][0] / max(1, gain.sum()), "share_other_bonf": tab[1][0] / max(1, (~gain).sum()),
                      "fisher_or": odds, "fisher_p": fp,

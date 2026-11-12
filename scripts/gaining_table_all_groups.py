@@ -1,13 +1,14 @@
-"""Table 2 (extended) from the GLGC anchors to every final v6-gaining SNP
-of the v2 model (anchor, candidate, unsupported), with the same columns.
+"""Table 2 extended from the GLGC anchors to every final gaining SNP of the main models (anchor, candidate, unsupported),
+with the same columns.
 
-v6 rule (config posthoc_v6 thresholds, unchanged) on every eligible SNP. Per GLGC group, as in gaining_interaction.py
-(Table 2 convention, BH over the tests of that group only): the Step 6a mediation scan (suppressor = per-SNP Bonferroni,
-indirect and direct of opposite sign, |c'| > |c|; consistent = per-SNP Bonferroni, same sign) and the Step 6b interaction
-scan over all testable metabolites; Step 6b sensitivity refits (covariate interactions, HC3, 1% trimming) for each SNP's
-top interaction and every per-SNP Bonferroni interaction. The anchor rows are checked against the saved Table 2 outputs.
+Share-based rule (config share_labels) on every eligible SNP. Per GLGC group, as in gaining_interaction.py (BH-FDR over
+the tests of that group only): the Step 6a mediation scan (suppressor = per-SNP Bonferroni, indirect and direct of
+opposite sign, |c'| > |c|; consistent = per-SNP Bonferroni, same sign) and the Step 6b interaction scan over all testable
+metabolites; Step 6b sensitivity refits (covariate interactions, HC3, 1% trimming) for each SNP's top interaction and
+every per-SNP Bonferroni interaction. The anchor rows are checked against the saved Table 2 outputs.
 
-Writes <results_dir>/v6/gaining_all_groups/{gaining_table_all_groups.xlsx, gaining_table_all_groups.csv, bonferroni_hits.csv}.
+Writes <results_dir>/labels/gaining_all_groups/{gaining_table_all_groups.xlsx, gaining_table_all_groups.csv,
+bonferroni_hits.csv}.
 Usage (from the repository root): python scripts/gaining_table_all_groups.py
 """
 import sys
@@ -59,12 +60,12 @@ def verdict(r, thr):
 def main():
     setup_logging()
     cfg = load_config()
-    ds, v6 = cfg["downstream"], cfg["posthoc_v6"]
+    ds, sl = cfg["downstream"], cfg["share_labels"]
     thr = ds["alpha"] / ds["bonferroni_per_snp"]
     base = Path(cfg["paths"]["results_dir"])
-    dirs = split_dirs(base, v6["models"][0])
-    t = label(per_split(dirs), len(dirs), v6["losing_max_share"], v6["gaining_min_share"], v6["min_selection_fraction"],
-              v6["stability_threshold"])
+    dirs = split_dirs(base, sl["models"][0])
+    t = label(per_split(dirs), len(dirs), sl["losing_max_share"], sl["gaining_min_share"], sl["min_selection_fraction"],
+              sl["stability_threshold"])
     ann = pd.read_csv(base / "glgc" / "annotated_all_snps.csv", index_col="feature", dtype={"rsid": str})
     gene = ann["overlapping_genes"].fillna(ann["upstream_gene"].str.split("(").str[0] + " / " +
                                            ann["downstream_gene"].str.split("(").str[0])
@@ -128,9 +129,9 @@ def main():
     H = H.sort_values(["_g", "rsid", "type", "p"]).drop(columns="_g")
 
     # check the anchor rows against the saved Table 2 outputs (gaining_interaction.py, classify_snps.py)
-    fp = pd.read_csv(base / "v6" / "gaining_interaction" / "full_primary.csv")
+    fp = pd.read_csv(base / sl["results_subdir"] / "gaining_interaction" / "full_primary.csv")
     t2 = fp[fp["estimable"]].sort_values("p").groupby("rsid").head(1).set_index("rsid")
-    sv = pd.read_csv(base / "v6" / "v2" / "gaining.csv").set_index("rsid")
+    sv = pd.read_csv(base / sl["results_subdir"] / sl["models"][0] / "gaining.csv").set_index("rsid")
     a = T[T["group"] == "anchor"].set_index("rsid")
     assert set(a.index) == set(t2.index), (set(a.index), set(t2.index))
     assert np.allclose(a["p"], t2.loc[a.index, "p"], rtol=1e-6) and np.allclose(a["q"], t2.loc[a.index, "fdr_q"], rtol=1e-6)
@@ -138,7 +139,7 @@ def main():
     assert np.allclose(a["retention"], sv.loc[a.index, "ratio_mean_S"])
     print("anchor rows match the saved Table 2 outputs")
 
-    out = base / "v6" / "gaining_all_groups"
+    out = base / sl["results_subdir"] / "gaining_all_groups"
     out.mkdir(parents=True, exist_ok=True)
     T.to_csv(out / "gaining_table_all_groups.csv", index=False, encoding="utf-8-sig", float_format="%.6g")
     H.to_csv(out / "bonferroni_hits.csv", index=False, encoding="utf-8-sig", float_format="%.6g")
@@ -198,7 +199,7 @@ def write_xlsx(T, H, path, thr, cfg):
     wb = Workbook()
     ws = wb.active
     ws.title = "Table2_extended"
-    ws.cell(1, 1, "Gaining-importance SNPs (final share-based label, v2 models), by GLGC support").font = Font(bold=True, size=12)
+    ws.cell(1, 1, "Gaining-importance SNPs (final share-based label, main models), by GLGC support").font = Font(bold=True, size=12)
     header(ws, 2, COLS)
     r = 3
     for g, sub in T.groupby("group", sort=False):
@@ -232,7 +233,7 @@ def write_xlsx(T, H, path, thr, cfg):
 
     wn = wb.create_sheet("Notes")
     notes = [
-        ("SNPs", "Final gaining SNPs of the v2 models (config posthoc_v6 rule) on every eligible SNP, grouped by GLGC support: "
+        ("SNPs", "Final gaining SNPs of the main models (config share_labels rule) on every eligible SNP, grouped by GLGC support: "
                  "anchor (p < 5e-8; manuscript Table 2), candidate (5e-8 <= p < 0.05), unsupported (p >= 0.05)."),
         ("Check", "The anchor rows are asserted to equal the saved outputs of scripts/gaining_interaction.py and "
                   "scripts/classify_snps.py."),

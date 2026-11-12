@@ -2,8 +2,8 @@
 
 Completed seeds (r2.json present) are skipped, so several processes can each take a subset of seeds.
 Usage (from the repository root):
-  python scripts/run_splits.py [--seeds 3001 3002 ...] [--n-jobs 24]
-  python scripts/run_splits.py --aggregate-only
+  python scripts/run_splits.py --models <prespecified|main> [--seeds 3001 3002 ...] [--n-jobs 24]
+  python scripts/run_splits.py --models <prespecified|main> --aggregate-only
 """
 import argparse
 import logging
@@ -26,18 +26,20 @@ def main():
     ap.add_argument("--n-jobs", type=int, default=None, help="XGBoost threads (default: all cores)")
     ap.add_argument("--aggregate-only", action="store_true")
     ap.add_argument("--force", action="store_true", help="recompute seeds that already have results")
-    ap.add_argument("--version", choices=["v1", "v2"], default="v1", help="v1 = pre-specified, v2 = post hoc")
+    ap.add_argument("--models", choices=["prespecified", "main"], default="prespecified",
+                    help="prespecified: early stopping on one validation slice, rank labels; main: CV early stopping")
     args = ap.parse_args()
     unknown = set(args.seeds) - set(all_seeds)
     if unknown:
         sys.exit(f"seeds {sorted(unknown)} are not in config (seed_base + 0..n_seeds-1)")
 
     res = Path(cfg["paths"]["results_dir"])
-    out_root = res / cfg["posthoc_v2"]["results_subdir"] if args.version == "v2" else res
+    main = args.models == "main"
+    out_root = res / (cfg["main_models"]["results_subdir"] if main else cfg["dynamics"]["results_subdir"])
     splits_dir = out_root / "splits"
-    run = pipeline.run_split_v2 if args.version == "v2" else pipeline.run_split
+    run = pipeline.run_split_main if main else pipeline.run_split
     tag = "aggregate" if args.aggregate_only else f"{min(args.seeds)}-{max(args.seeds)}"
-    setup_logging(res / "logs" / f"run_splits_{args.version}_{tag}_{time.strftime('%Y%m%d_%H%M%S')}.log")
+    setup_logging(res / "logs" / f"run_splits_{args.models}_{tag}_{time.strftime('%Y%m%d_%H%M%S')}.log")
     k = cfg["prescreen"]["k"]
     log.info("k = %d, seeds %s, n_jobs %s, group_related %s", k, args.seeds, args.n_jobs,
              cfg["splits"]["group_related"])

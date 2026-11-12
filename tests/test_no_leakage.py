@@ -155,9 +155,9 @@ def test_nested_cv_scoring_rows_never_used_for_fitting():
         assert all(not (s & ot) for s in block), "inner scoring touched the outer test fold"
 
 
-def test_v2_cv_early_stopping_never_touches_test():
+def test_main_cv_early_stopping_never_touches_test():
     cfg = small_cfg()
-    cfg["posthoc_v2"]["early_stopping"].update(n_estimators_cap=60, rounds=10)
+    cfg["main_models"]["early_stopping"].update(n_estimators_cap=60, rounds=10)
     data = synthetic(cfg)
     seed = cfg["splits"]["seed_base"]
     sp = split.make_split(data.n, seed, cfg["splits"]["test_size"], cfg["splits"]["val_fraction_of_train"],
@@ -170,10 +170,10 @@ def test_v2_cv_early_stopping_never_touches_test():
     calls, original, recording_fit = _record_fits()
     xgb.XGBRegressor.fit = recording_fit
     try:
-        _, dyn = pipeline.run_split_v2(data, seed, cfg, k=10)
+        _, dyn = pipeline.run_split_main(data, seed, cfg, k=10)
     finally:
         xgb.XGBRegressor.fit = original
-    folds = cfg["posthoc_v2"]["early_stopping"]["cv_folds"]
+    folds = cfg["main_models"]["early_stopping"]["cv_folds"]
     assert len(calls) == 2 * folds + 2          # two models per CV fold + two final fits
     for c in calls:
         assert not c["train"] & test_ids and not c["eval"] & test_ids

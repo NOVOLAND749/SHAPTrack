@@ -80,9 +80,9 @@ def _write_split(out_dir, data, sp, selected, ranking, k, results, X, dyn, summa
 
 
 def cv_tree_counts(data, sp, cfg, k, seed, n_jobs=None):
-    """v2 early stopping: per group-fold of the training portion, residualize and pre-select on the fold's training
+    """Cross-validated early stopping (main models): per group-fold of the training portion, residualize and pre-select on the fold's training
     rows, fit both models with early stopping on the held-out fold. Returns best_iteration and val R² per fold."""
-    es = cfg["posthoc_v2"]["early_stopping"]
+    es = cfg["main_models"]["early_stopping"]
     folds = split.group_kfold(sp.train, _groups(data, cfg), es["cv_folds"], seed)
     test = set(sp.test)
     out = {"genomics": [], "joint": []}
@@ -96,12 +96,12 @@ def cv_tree_counts(data, sp, cfg, k, seed, n_jobs=None):
     return out
 
 
-def run_split_v2(data, seed, cfg, k, out_dir=None, n_jobs=None, save_shap=False):
-    """Post hoc v2: CV early stopping, final model on the whole training portion, SHAP-ratio labels."""
+def run_split_main(data, seed, cfg, k, out_dir=None, n_jobs=None, save_shap=False):
+    """Main models: CV early stopping, final model on the whole training portion, SHAP-ratio labels."""
     t0 = time.time()
     s = cfg["splits"]
     sp = split.make_split(data.n, seed, s["test_size"], s["val_fraction_of_train"], _groups(data, cfg))
-    log.info("v2 seed %d: train %d (CV early stopping), test %d", seed, len(sp.train), len(sp.test))
+    log.info("main seed %d: train %d (CV early stopping), test %d", seed, len(sp.train), len(sp.test))
     folds = cv_tree_counts(data, sp, cfg, k, seed, n_jobs)
 
     y, resid = split.residualize(data.y.values, data.covariates.values, sp.train)
@@ -119,15 +119,15 @@ def run_split_v2(data, seed, cfg, k, out_dir=None, n_jobs=None, save_shap=False)
                      "r2_val": float(np.mean([f["r2_val"] for f in folds[name]]))})   # CV mean, before refit
         sv = explain.shap_values(model, X[name].iloc[sp.test], fp)
         results[name] = {"info": info, "imp": explain.mean_abs_shap(sv, X[name].columns), "shap": sv}
-        log.info("v2 seed %d %s: folds best_iteration %s -> %d trees, R2 train %.4f test %.4f", seed, name,
+        log.info("main seed %d %s: folds best_iteration %s -> %d trees, R2 train %.4f test %.4f", seed, name,
                  info["fold_best_iteration"], n_trees, info["r2_train"], info["r2_test"])
 
     ranks = dynamics.split_ranks(results["genomics"]["imp"], results["joint"]["imp"], selected,
                                  cfg["dynamics"]["rank_method"])
-    dyn, dyn_stats = dynamics.add_labels_v2(ranks, cfg)
-    log.info("v2 seed %d: %d gaining, %d losing; median SHAP ratio %.3f", seed, dyn_stats["n_gaining"],
+    dyn, dyn_stats = dynamics.add_labels_ratio(ranks, cfg)
+    log.info("main seed %d: %d gaining, %d losing; median SHAP ratio %.3f", seed, dyn_stats["n_gaining"],
              dyn_stats["n_losing"], dyn_stats["median_ratio"])
-    summary = {"version": "v2", "seed": seed, "k": k, "n_train": len(sp.train), "n_test": len(sp.test),
+    summary = {"version": "main", "seed": seed, "k": k, "n_train": len(sp.train), "n_test": len(sp.test),
                "n_fit": len(sp.fit), "n_val": len(sp.val), "group_related": s["group_related"],
                "residualization": resid, "genomics": results["genomics"]["info"], "joint": results["joint"]["info"],
                "dynamics": dyn_stats, "seconds": round(time.time() - t0, 1)}
@@ -152,8 +152,8 @@ def write_aggregate(ranks, r2, cfg, out_dir):
     """Step 4 outputs: dynamics_aggregate, gaining, losing, sensitivity_grid, r2_per_split, r2_summary."""
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
-    v2 = any(r.get("version") == "v2" for r in r2.values())
-    dy, n_seeds = (cfg["posthoc_v2"]["labels"] if v2 else cfg["dynamics"]), len(ranks)
+    main = any(r.get("version") == "main" for r in r2.values())
+    dy, n_seeds = (cfg["main_models"]["labels"] if main else cfg["dynamics"]), len(ranks)
     agg = dynamics.aggregate(ranks, n_seeds, dy["min_selection_fraction"], dy["stability_threshold"])
     agg.to_csv(out / "dynamics_aggregate.csv")
     for lab in ("gaining", "losing"):
@@ -163,7 +163,7 @@ def write_aggregate(ranks, r2, cfg, out_dir):
     counts["per_split_losing"] = {s: int((d["label"] == "losing").sum()) for s, d in ranks.items()}
     (out / "stage_counts.json").write_text(json.dumps(counts, indent=2))
     grid_cfg = {**cfg, "splits": {**cfg["splits"], "n_seeds": n_seeds}}
-    grid_fn = dynamics.sensitivity_grid_v2 if v2 else dynamics.sensitivity_grid
+    grid_fn = dynamics.sensitivity_grid_ratio if main else dynamics.sensitivity_grid
     grid_fn(ranks, grid_cfg, agg).to_csv(out / "sensitivity_grid.csv", index=False)
     per = pd.DataFrame([{"seed": s, "model": m, **{k: r[m][k] for k in
                          ("r2_train", "r2_val", "r2_test", "best_iteration", "n_features")}}

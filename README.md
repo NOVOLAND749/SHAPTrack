@@ -67,14 +67,14 @@ file; run the batch query on the SNPnexus website (assembly GRCh38). SNPs withou
 | GLGC labels: anchor (p < 5 × 10⁻⁸), candidate (5 × 10⁻⁸ ≤ p < 0.05), unsupported | `python -m src.glgc` | `glgc/annotated_all_snps.csv` |
 | MAF and imputation quality | `scripts/snp_maf_info.py` | `glgc/snp_maf_info.csv` |
 | Number of pre-selected SNPs (k) by nested CV | `scripts/run_nested_cv.py` | `nested_cv.csv`, `nested_cv_decision.json` |
-| 20 splits (60/40): pre-selection, residualization and early stopping on training data only; genomics-only and joint XGBoost models; SHAP on test data | `scripts/run_splits.py` (`--version v1`, `--version v2`) | `splits/`, `v2/splits/`, `v2/aggregate/` |
-| Single-metabolite mediation for every GLGC anchor (Table 1, suppressor counts in Table 2) | `scripts/anchor_mediation.py` | `v2/anchor_mediation/` |
-| Mediation through a cross-fitted metabolome LDL-C score (proportion mediated) | `scripts/metabolome_score_mediation.py` | `v3/` |
-| Losing / gaining labels from the retained share of importance | `scripts/classify_snps.py` | `v6/v2/{snp_table,losing,gaining}.csv` |
-| Mediation for suggestive (GLGC candidate) SNPs | `scripts/candidate_mediation.py` | `v6/candidate_mediation/` |
-| Interaction scan and sensitivity analyses for gaining SNPs (Table 2) | `scripts/gaining_interaction.py` | `v6/gaining_interaction/` |
-| Table 2 extended to gaining SNPs without GLGC support | `scripts/gaining_table_all_groups.py` | `v6/gaining_all_groups/` |
-| Interaction scan of every pre-selected SNP (global FDR) | `scripts/global_interaction_scan.py` | `v2/split_interaction/` |
+| 20 splits (60/40): pre-selection, residualization and early stopping on training data only; genomics-only and joint XGBoost models; SHAP on test data | `scripts/run_splits.py --models main`, `--models prespecified` | `main/splits/`, `main/aggregate/`, `prespecified/` |
+| Single-metabolite mediation for every GLGC anchor (Table 1, suppressor counts in Table 2) | `scripts/anchor_mediation.py` | `main/anchor_mediation/` |
+| Mediation through a cross-fitted metabolome LDL-C score (proportion mediated) | `scripts/metabolome_score_mediation.py` | `metabolome_score/` |
+| Losing / gaining labels from the retained share of importance | `scripts/classify_snps.py` | `labels/main/{snp_table,losing,gaining}.csv` |
+| Mediation for suggestive (GLGC candidate) SNPs | `scripts/candidate_mediation.py` | `labels/candidate_mediation/` |
+| Interaction scan and sensitivity analyses for gaining SNPs (Table 2) | `scripts/gaining_interaction.py` | `labels/gaining_interaction/` |
+| Table 2 extended to gaining SNPs without GLGC support | `scripts/gaining_table_all_groups.py` | `labels/gaining_all_groups/` |
+| Interaction scan of every pre-selected SNP (global FDR) | `scripts/global_interaction_scan.py` | `main/split_interaction/` |
 | Figures 2–3, Supplementary Table S1 | `scripts/make_figures.py`, `scripts/make_supp_table_s1.py` | `figures/`, `tables/` |
 
 Mediation (Baron–Kenny with Sobel test) and interaction models are ordinary least squares on all participants with
@@ -82,9 +82,13 @@ age, sex and PC1–PC10 in every model and log-transformed, standardized metabol
 `src/interaction.py`, vectorized in `src/ols.py`). Multiple testing: Bonferroni within SNP (0.05 / 1,257) and
 Benjamini–Hochberg FDR across the tests of an analysis.
 
-Version labels in file and key names follow the analysis record: `v1` = pre-specified models and rank-based labels;
-`v2` = models with cross-validated early stopping (the models reported); `v3` = metabolome-score mediation; `v6` = the
-share-based labels reported in the manuscript.
+Two model sets are fitted on the same splits. The main models, reported in the manuscript, use 5-fold cross-validated
+early stopping within the training portion; the pre-specified models stop early on one validation slice and carry the
+pre-specified rank-based labels (`dynamics` in `config.yaml`). The losing and gaining labels reported in the manuscript
+are the share-based labels of the main models (`share_labels` in `config.yaml`): a SNP is labelled losing in a split if
+it keeps less than half of its genomics-only importance (S < 1/3) and gaining if its importance rises (S > 1/2), and
+receives a final label if it carries the same label in at least 70% of the splits in which it was selected. These labels
+were specified after the pre-specified rank-based rules had labelled no SNP.
 
 ## Tests
 

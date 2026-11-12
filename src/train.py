@@ -46,8 +46,8 @@ def fit_model(X, y, split, cfg, seed, n_jobs=None):
 
 
 def fit_early_stopping(X_tr, y_tr, X_va, y_va, cfg, seed, n_jobs=None):
-    """v2 CV fold: early stopping on the held-out fold with the posthoc_v2 cap and patience."""
-    es = cfg["posthoc_v2"]["early_stopping"]
+    """CV fold of the main models: early stopping on the held-out fold (main_models cap and patience)."""
+    es = cfg["main_models"]["early_stopping"]
     params = {**xgb_params(cfg, seed, n_jobs), "n_estimators": es["n_estimators_cap"]}
     m = xgb.XGBRegressor(**params, early_stopping_rounds=es["rounds"])
     m.fit(X_tr, y_tr, eval_set=[(X_va, y_va)], verbose=False)
@@ -55,7 +55,7 @@ def fit_early_stopping(X_tr, y_tr, X_va, y_va, cfg, seed, n_jobs=None):
 
 
 def fit_fixed(X, y, train_idx, test_idx, n_trees, cfg, seed, n_jobs=None):
-    """v2 final model: fixed number of trees on the whole training portion, no early stopping."""
+    """Final main model: fixed number of trees on the whole training portion, no early stopping."""
     if set(train_idx) & set(test_idx):
         raise ValueError("train and test rows overlap")
     model = xgb.XGBRegressor(**{**xgb_params(cfg, seed, n_jobs), "n_estimators": n_trees})

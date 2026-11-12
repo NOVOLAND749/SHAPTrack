@@ -1,9 +1,9 @@
-"""Interaction scan (Step 6b model) for the v6-gaining SNPs (v2 models), one scan per set (primary = anchors, secondary =
-candidates) so that BH-FDR runs over the tests of that set only (manuscript Table 2 convention), plus the sensitivity
-refits (covariate interactions, HC3, 1% trimming) for every Bonferroni hit. Reads saved v6 labels; no re-labelling.
+"""Interaction scan (Step 6b model) for the final gaining SNPs of the main models, one scan per GLGC set (primary =
+anchors, secondary = candidates) so that BH-FDR runs over the tests of that set only (manuscript Table 2), plus the
+sensitivity refits (covariate interactions, HC3, 1% trimming) for every Bonferroni hit. Reads the saved labels.
 
 Writes <out>/{full_primary.csv, full_secondary.csv, sensitivity.csv, summary.json}; default <out> =
-<results_dir>/v6/gaining_interaction.
+<results_dir>/labels/gaining_interaction.
 Usage (from the repository root): python scripts/gaining_interaction.py [--out DIR]
 """
 import argparse
@@ -26,10 +26,11 @@ def main():
     setup_logging()
     cfg = load_config()
     base = Path(cfg["paths"]["results_dir"])
-    out = Path(a.out) if a.out else base / "v6" / "gaining_interaction"
+    out = Path(a.out) if a.out else base / cfg["share_labels"]["results_subdir"] / "gaining_interaction"
     out.mkdir(parents=True, exist_ok=True)
-    v6 = pd.read_csv(base / "v6" / "v2" / "snp_table.csv", index_col=0)
-    gain = v6[v6["eligible"] & (v6["v6_label"] == "gaining")]
+    sl = cfg["share_labels"]
+    lab = pd.read_csv(base / sl["results_subdir"] / sl["models"][0] / "snp_table.csv", index_col=0)
+    gain = lab[lab["eligible"] & (lab["label"] == "gaining")]
     data = load_dataset(cfg)
     mets_t = transform_metabolites(data.metabolites, cfg["downstream"]["metabolite_transform"])
     names = metabolite_annotation(cfg)

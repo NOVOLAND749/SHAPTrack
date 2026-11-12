@@ -1,7 +1,7 @@
-"""Metabolome-score mediation screen over all SNPs (config metabolome_v3).
+"""Metabolome-score mediation screen over all SNPs (config metabolome_score).
 
-Writes results/v3/{all,nonlipid}/ (score.csv, scan.csv, losing*.csv, gaining*.csv), results/v3/summary.json and
-results/v3/glgc/annotated.csv (primary sets).
+Writes results/metabolome_score/{all,nonlipid}/ (score.csv, scan.csv, losing*.csv, gaining*.csv), results/metabolome_score/summary.json and
+results/metabolome_score/glgc/annotated.csv (primary sets).
 Usage (from the repository root): python scripts/metabolome_score_mediation.py
 """
 import json
@@ -22,18 +22,18 @@ SET_COLS = ["losing", "gaining", "gaining_secondary"]
 
 def main():
     cfg = load_config()
-    v3 = cfg["metabolome_v3"]
+    ms = cfg["metabolome_score"]
     base = Path(cfg["paths"]["results_dir"])
-    res = base / v3["results_subdir"]
+    res = base / ms["results_subdir"]
     setup_logging(base / "logs" / f"metabolome_score_mediation_{time.strftime('%Y%m%d_%H%M%S')}.log")
     t0 = time.time()
     data = load_dataset(cfg)
     mets_t = transform_metabolites(data.metabolites, cfg["downstream"]["metabolite_transform"])
     names = metabolite_annotation(cfg)
-    lipid = names.index[names["SUPER_PATHWAY"].isin(v3["sensitivity_exclude_super_pathway"])]
+    lipid = names.index[names["SUPER_PATHWAY"].isin(ms["sensitivity_exclude_super_pathway"])]
     ann = pd.read_csv(base / "glgc" / "annotated_all_snps.csv", index_col="feature", dtype={"rsid": str})
     groups = data.groups.values if cfg["splits"]["group_related"] else None
-    sc = v3["score"]
+    sc = ms["score"]
     lo, hi, num = sc["alphas_log10"]
     alphas = np.logspace(lo, hi, num)
     ann_cols = ["rsid", "overlapping_genes", "upstream_gene", "downstream_gene", "glgc_label", "glgc_pvalue_neg_log10_GC"]

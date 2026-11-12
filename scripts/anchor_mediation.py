@@ -1,5 +1,5 @@
 """Single-metabolite mediation scan for every GLGC anchor SNP (p < 5e-8), independent of the SHAPTrack labels
-(config posthoc_v2.anchor_mediation)                          -> <results_dir>/v2/anchor_mediation/
+(config main_models.anchor_mediation)                         -> <results_dir>/main/anchor_mediation/
 Same Step 6 models: all participants, raw medication-adjusted LDL-C, covariates, log-z metabolites.
 Usage (from the repository root): python scripts/anchor_mediation.py
 """
@@ -27,7 +27,7 @@ def annotate(df, names, ann):
 def main():
     cfg = load_config()
     base = Path(cfg["paths"]["results_dir"])
-    res = base / cfg["posthoc_v2"]["results_subdir"]
+    res = base / cfg["main_models"]["results_subdir"]
     setup_logging(base / "logs" / f"anchor_mediation_{time.strftime('%Y%m%d_%H%M%S')}.log")
     t0 = time.time()
     data = load_dataset(cfg)

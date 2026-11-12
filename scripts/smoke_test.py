@@ -74,13 +74,13 @@ def main():
     print(f"  stage counts: {json.dumps({k: v for k, v in counts.items() if not k.startswith('per_split')})}")
 
     s2 = seeds[0]
-    summary2, dyn2 = pipeline.run_split_v2(sub, s2, cfg, sm["k"], out / "v2" / "splits" / f"seed_{s2}")
-    check((out / "v2" / "splits" / f"seed_{s2}" / "r2.json").exists(), f"v2 seed {s2}: outputs written")
-    check(len(summary2["genomics"]["fold_best_iteration"]) == cfg["posthoc_v2"]["early_stopping"]["cv_folds"],
-          f"v2 seed {s2}: CV early stopping per fold {summary2['genomics']['fold_best_iteration']}, "
+    summary2, dyn2 = pipeline.run_split_main(sub, s2, cfg, sm["k"], out / "main" / "splits" / f"seed_{s2}")
+    check((out / "main" / "splits" / f"seed_{s2}" / "r2.json").exists(), f"main seed {s2}: outputs written")
+    check(len(summary2["genomics"]["fold_best_iteration"]) == cfg["main_models"]["early_stopping"]["cv_folds"],
+          f"main seed {s2}: CV early stopping per fold {summary2['genomics']['fold_best_iteration']}, "
           f"R2 test genomics {summary2['genomics']['r2_test']:.3f}, joint {summary2['joint']['r2_test']:.3f}")
     check(set(dyn2["label"]) <= {"gaining", "losing", "none"} and "rel_ratio" in dyn2,
-          f"v2 seed {s2}: ratio labels {dyn2['label'].value_counts().to_dict()}")
+          f"main seed {s2}: ratio labels {dyn2['label'].value_counts().to_dict()}")
 
     nested, _ = pipeline.run_nested_cv(sub, cfg, k_grid=[50, sm["k"]])
     decision = pipeline.choose_k(nested, [50, sm["k"]], sm["k"])

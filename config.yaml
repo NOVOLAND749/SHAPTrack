@@ -92,8 +92,10 @@ shap:
   feature_perturbation: tree_path_dependent
   compute_on: test
 
-# Pre-specified rank-based labels (v1 models): within-SNP ranks, per-split ΔRank percentiles, cross-split stability.
+# Pre-specified models (early stopping on one validation slice) and their rank-based labels: within-SNP ranks,
+# per-split ΔRank percentiles, cross-split stability.
 dynamics:
+  results_subdir: prespecified
   rank_within: snps               # ranks computed among pre-selected SNPs only, both models
   rank_method: min
   gain_percentile: 0.99           # per-split ΔRank cutoff
@@ -129,9 +131,9 @@ smoke_test:
   n_seeds: 2
   k: 200
 
-# v2 models (primary models of the manuscript): cross-validated early stopping and the SHAP-ratio labels.
-posthoc_v2:
-  results_subdir: v2
+# Main models (reported in the manuscript): cross-validated early stopping; per-split SHAP-ratio labels.
+main_models:
+  results_subdir: main
   early_stopping:
     mode: cv                      # K group-folds over the training portion; per fold: residualize, pre-select top-k,
     cv_folds: 5                   #   fit with early stopping on the held-out fold
@@ -154,8 +156,8 @@ posthoc_v2:
     snps: glgc_anchor
 
 # Metabolome-score mediation (cross-fitted metabolome LDL-C score) for every SNP.
-metabolome_v3:
-  results_subdir: v3
+metabolome_score:
+  results_subdir: metabolome_score
   score:
     model: ridge_cv
     alphas_log10: [-2, 4, 25]     # np.logspace(-2, 4, 25)
@@ -179,8 +181,8 @@ outcome_correction:
   tc_med_factor: 0.8                # TC_adj = TC / 0.8 for lipid-lowering medication
 
 # Share-based labels used in the manuscript (post hoc; specified after the pre-specified rank-based rules labelled no SNP).
-posthoc_v6:
-  results_subdir: v6
+share_labels:
+  results_subdir: labels
   share: joint_over_sum            # per split S = I_joint / (I_joint + I_genomics); undefined if both 0 (no label)
   sets:
     primary: [anchor]              # GLGC p < 5e-8
@@ -192,7 +194,7 @@ posthoc_v6:
   sensitivity:
     stability: [0.50]
     losing_max_share: [0.428571]
-  models: [v2, v1]                 # first = primary
+  models: [main, prespecified]     # first = reported
 
 # GWAS that selects the candidate SNPs (scripts/make_gwas_pheno.py, scripts/run_gwas.sh): corrected LDL-C in the
 # analysis participants, covariates sex, age, lipid medication and PC1-3; MAF >= 0.01; p <= 0.05; clumping r2 0.1 / 250 kb.

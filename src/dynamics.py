@@ -116,7 +116,7 @@ def sensitivity_grid(ranks, cfg, primary):
 
 
 def label_split_ratio(df, losing_max_rel, gaining_min_rel, floor):
-    """v2 per-split labels from the change in mean |SHAP| relative to the split's typical change.
+    """Per-split labels of the main models from the change in mean |SHAP| relative to the split's typical change.
 
     ratio = SHAP_joint / SHAP_genomics (inf when SHAP_genomics = 0); rel = ratio / median ratio over SNPs with
     SHAP_genomics > 0. Losing: rel <= losing_max_rel, rank_genomics <= floor, SHAP_genomics > 0.
@@ -129,7 +129,7 @@ def label_split_ratio(df, losing_max_rel, gaining_min_rel, floor):
     if not med > 0:
         # Rule undefined (more than half of the SNPs used by the genomics model are unused by the joint model): no SNP
         # is labelled in this split. Importances are kept.
-        log.warning("median SHAP ratio is %s; v2 relative ratio undefined, no v2 labels in this split", med)
+        log.warning("median SHAP ratio is %s; relative ratio undefined, no ratio labels in this split", med)
         none = pd.Series("none", index=df.index, name="label")
         return none, ratio, pd.Series(np.nan, index=df.index), med
     rel = ratio / med
@@ -139,20 +139,20 @@ def label_split_ratio(df, losing_max_rel, gaining_min_rel, floor):
     return label, ratio, rel, med
 
 
-def add_labels_v2(df, cfg):
-    lb = cfg["posthoc_v2"]["labels"]
+def add_labels_ratio(df, cfg):
+    lb = cfg["main_models"]["labels"]
     out = df.copy()
     out["label"], out["shap_ratio"], out["rel_ratio"], med = label_split_ratio(
         df, lb["losing_max_rel"], lb["gaining_min_rel"], lb["importance_floor_rank"])
-    stats = {"median_ratio": med, "v2_rule_defined": bool(med > 0), "n_gaining": int((out["label"] == "gaining").sum()),
+    stats = {"median_ratio": med, "ratio_rule_defined": bool(med > 0), "n_gaining": int((out["label"] == "gaining").sum()),
              "n_losing": int((out["label"] == "losing").sum()),
              "n_zero_shap_genomics": int((df["shap_genomics"] == 0).sum()),
              "n_zero_shap_joint": int((df["shap_joint"] == 0).sum())}
     return out, stats
 
 
-def sensitivity_grid_v2(ranks, cfg, primary):
-    lb = cfg["posthoc_v2"]["labels"]
+def sensitivity_grid_ratio(ranks, cfg, primary):
+    lb = cfg["main_models"]["labels"]
     grid = lb["sensitivity_grid"]
     n_seeds = cfg["splits"]["n_seeds"]
     prim = {lab: primary.index[primary["final_label"] == lab] for lab in ("gaining", "losing")}

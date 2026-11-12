@@ -1,7 +1,7 @@
-"""Single-metabolite mediation for the GLGC candidate SNPs
-eligible in v6 (v2 models), same model as Step 6 / the anchor scan, to compare v6-losing candidates with the others.
+"""Single-metabolite mediation for the GLGC candidate SNPs (suggestive, 5e-8 <= p < 0.05) eligible for the share-based
+labels (main models), same model as Step 6 / the anchor scan, to compare losing candidates with the others.
 
-Writes <results_dir>/v6/candidate_mediation/{full.csv, top_per_snp.csv, summary.json}.
+Writes <results_dir>/labels/candidate_mediation/{full.csv, top_per_snp.csv, summary.json}.
 Usage (from the repository root): python scripts/candidate_mediation.py
 """
 import json
@@ -23,15 +23,16 @@ def main():
     setup_logging()
     cfg = load_config()
     base = Path(cfg["paths"]["results_dir"])
-    v6 = pd.read_csv(base / "v6" / "v2" / "snp_table.csv", index_col=0)
-    cand = v6[(v6["set"] == "secondary") & v6["eligible"]]
+    sl = cfg["share_labels"]
+    lab = pd.read_csv(base / sl["results_subdir"] / sl["models"][0] / "snp_table.csv", index_col=0)
+    cand = lab[(lab["set"] == "secondary") & lab["eligible"]]
     data = load_dataset(cfg)
     ds = cfg["downstream"]
     mets_t = transform_metabolites(data.metabolites, ds["metabolite_transform"])
     ann = pd.read_csv(base / "glgc" / "annotated_all_snps.csv", index_col="feature", dtype={"rsid": str})
     med, skipped = mediation.run(cand.index.tolist(), data.snps, data.y, data.covariates, mets_t, cfg)
     med = annotate(med, metabolite_annotation(cfg), ann)
-    out = base / "v6" / "candidate_mediation"
+    out = base / sl["results_subdir"] / "candidate_mediation"
     out.mkdir(parents=True, exist_ok=True)
     med.to_csv(out / "full.csv", index=False)
     mediation.top_per_snp(med, ds["report_top_n_per_snp"]).to_csv(out / "top_per_snp.csv", index=False)
