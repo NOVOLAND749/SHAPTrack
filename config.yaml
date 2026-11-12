@@ -1,0 +1,210 @@
+# SHAPTrack: all parameters of the analysis reported in the manuscript (corrected LDL-C). Do not hard-code any of these
+# in src/ or scripts/. Thresholds were fixed before each run.
+#
+# Paths are relative to the repository root. Input files under data/ are CLSA releases and public resources that are not
+# distributed with this repository (see README). To run with site-specific locations, copy this file, edit `paths` and
+# `gwas`, and set SHAPTRACK_CONFIG=<your copy>.
+
+paths:
+  # Analysis file assembled from the CLSA releases (one row per participant: ADM_GWAS3_COM, SNP dosage columns "chr...",
+  # 1,257 Metabolon metabolite columns with numeric names, minimum-imputed; outcome; sex; ancestry).
+  data_pkl_original: data/data_final_0.1.pkl
+  data_pkl: derived/analysis_data.pkl            # data_pkl_original with the SNP block replaced (scripts/build_analysis_data.py)
+  metabolite_annotation: data/ANNOTATION TABLE_V2.CSV   # Metabolon chemical annotation (CHEM_ID, names, pathways)
+  # CLSA Metabolon normalized data (common metabolites). Used only to resolve 18 participants that appear several times in
+  # the analysis file (QC samples "LQCnnnn" merged onto real samples "nnnn"); the row matching "nnnn" is kept.
+  metabolomics_source: data/CLSA_NORMDATAALL_COMMONMETABOLITSONLY.CSV
+  # Age and sex. Tab-separated; key "#IID" == ADM_GWAS3_COM; sex 1 = M, 2 = F.
+  covariates: data/covariates.cov
+  # CLSA Genomics3 sample QC release: PC1..PC20 (key ADM_GWAS_COM == ADM_GWAS3_COM).
+  genetic_pcs: data/clsa_sqc_v3.txt
+  # CLSA Genomics3 pairwise relatedness (KING): family clusters are kept within one partition of every split.
+  relatedness: data/clsa_rel_v3.txt
+  # GLGC 2021 trans-ancestry LDL-C (INV) meta-analysis; tab-separated, key rsID, positions b37.
+  glgc_summary: data/with_BF_meta-analysis_AFR_EAS_EUR_HIS_SAS_LDL_INV_ALL_with_N_1
+  # rsID / gene map of the model SNPs (SNPnexus format, GRCh38), written by scripts/make_rsid_map.py from a
+  # SNPnexus result (scripts/make_snpnexus_upload.py writes the upload) and UCSC dbSNP 141 for SNPs SNPnexus did not cover.
+  snpnexus_annotation: annotation/rsid_map.tsv
+  snpnexus_previous: annotation/snpnexus_genomic_mapping.tsv
+  dbsnp_hg38: data/snp141.txt                   # UCSC snp141 on hg38 (0-based start, chromEnd = GRCh38 position)
+  gene_list_hg38: data/glist-hg38.tw.txt        # PLINK hg38 gene ranges
+  results_dir: results
+  # Corrected outcome written by scripts/make_corrected_ldl.py (replaces the analysis file's LDL in src.data.load_dataset).
+  outcome_file: derived/ldl_corrected.csv
+  # Inputs of make_corrected_ldl.py: CLSA baseline release (lipids in mmol/L; entity_id <-> ADM_GWAS3_COM) and the
+  # baseline lipid-lowering medication flag (LIPID_MED_baseline).
+  clsa_baseline: data/clsa_baseline.csv
+  lipid_med: data/lipid_med.csv
+  # CLSA Genomics3 imputation info per chromosome (allele frequency and Rsq).
+  imputation_info: data/clsa_mfi_{chr}_v3.txt.gz
+  figures_dir: figures
+  tables_dir: tables
+
+columns:
+  id: ADM_GWAS3_COM
+  outcome: LDL                    # medication-adjusted LDL-C
+  outcome_file_column: LDL_corrected
+  ancestry: DXA_WB_ETHNICITY_COM
+  snp_prefix: "chr"
+  metabolite_pattern: "^[0-9]+$"
+  covariates: [age, sex, PC1, PC2, PC3, PC4, PC5, PC6, PC7, PC8, PC9, PC10]
+
+sample:
+  drop_outcome_le_zero: true
+  ancestry_restriction: null      # null = all participants with PCs
+
+splits:
+  test_size: 0.40
+  val_fraction_of_train: 0.20     # early-stopping validation, carved from TRAIN only
+  n_seeds: 20
+  seed_base: 3001                 # seeds = seed_base + i, i in 0..n_seeds-1
+  group_related: true             # every family cluster stays inside one partition (train/val/test, CV folds)
+
+prescreen:
+  method: f_regression            # sklearn f_regression on TRAIN only
+  min_variance: 1.0e-8
+  k: 5000                         # chosen by the pre-specified nested-CV rule (scripts/run_nested_cv.py)
+
+nested_cv:
+  seed: 3001
+  outer_folds: 3
+  inner_folds: 2
+  k_grid: [500, 1000, 2000, 3000, 5000]
+  keep_k_if_flat_within_sd: 3000
+
+xgboost:
+  objective: reg:squarederror
+  n_estimators: 600
+  learning_rate: 0.05
+  max_depth: 4
+  subsample: 0.9
+  colsample_bytree: 0.9
+  colsample_bynode: 0.8
+  gamma: 0.2
+  min_child_weight: 5
+  reg_alpha: 1.0
+  reg_lambda: 5.0
+  tree_method: hist
+  early_stopping_rounds: 100
+  refit_on_full_train_with_best_iteration: true
+
+shap:
+  feature_perturbation: tree_path_dependent
+  compute_on: test
+
+# Pre-specified rank-based labels (v1 models): within-SNP ranks, per-split ΔRank percentiles, cross-split stability.
+dynamics:
+  rank_within: snps               # ranks computed among pre-selected SNPs only, both models
+  rank_method: min
+  gain_percentile: 0.99           # per-split ΔRank cutoff
+  loss_percentile: 0.01
+  importance_floor_rank: 300      # gaining: rank_joint <= floor; losing: rank_genomics <= floor
+  require_nonzero_shap: true      # gaining needs mean|SHAP|_joint > 0, losing needs mean|SHAP|_genomics > 0
+  min_selection_fraction: 0.50    # SNP must be pre-selected in >= this fraction of splits to be eligible
+  stability_threshold: 0.70       # fraction of eligible splits with the same label
+  sensitivity_grid:
+    percentiles: [0.005, 0.01, 0.02]
+    stability: [0.50, 0.70]
+    floors: [300, 600]
+
+glgc:
+  merge_on: rsID                  # never on position (CLSA GRCh38 vs GLGC b37)
+  pvalue_column: pvalue_neg_log10_GC   # pvalue_GC underflows to 0.0 for the strongest loci
+  anchor_min_neglog10p: 7.30103   # -log10(5e-8): established (anchor)
+  candidate_min_neglog10p: 1.30103  # -log10(0.05): suggestive (candidate); otherwise unsupported
+  downstream_labels: [anchor, candidate]
+
+downstream:
+  outcome: LDL                    # medication-adjusted, NOT residualized; covariates enter every OLS directly
+  metabolite_transform: log_zscore
+  covariates_in_every_model: true
+  bonferroni_per_snp: 1257
+  fdr_method: fdr_bh
+  alpha: 0.05
+  interaction_sensitivity_terms: [covariate_x_snp, covariate_x_metabolite]
+  report_top_n_per_snp: 10
+
+smoke_test:
+  n_samples: 500
+  n_seeds: 2
+  k: 200
+
+# v2 models (primary models of the manuscript): cross-validated early stopping and the SHAP-ratio labels.
+posthoc_v2:
+  results_subdir: v2
+  early_stopping:
+    mode: cv                      # K group-folds over the training portion; per fold: residualize, pre-select top-k,
+    cv_folds: 5                   #   fit with early stopping on the held-out fold
+    n_estimators_cap: 2000
+    rounds: 100
+    final_trees: mean_best_plus_1 # final model on the whole training portion with mean(fold best_iteration) + 1 trees
+  labels:                         # per split, among pre-selected SNPs; ratio = mean|SHAP|_joint / mean|SHAP|_genomics
+    rule: shap_ratio              # rel = ratio / median(ratio over SNPs with mean|SHAP|_genomics > 0 in that split)
+    losing_max_rel: 0.5
+    gaining_min_rel: 2.0
+    importance_floor_rank: 300
+    min_selection_fraction: 0.50
+    stability_threshold: 0.70
+    sensitivity_grid:
+      losing_max_rel: [0.33, 0.5, 0.67]
+      gaining_min_rel: [1.5, 2.0, 3.0]
+      stability: [0.50, 0.70]
+      floors: [300, 600]
+  anchor_mediation:               # single-metabolite mediation for every GLGC anchor, independent of the labels
+    snps: glgc_anchor
+
+# Metabolome-score mediation (cross-fitted metabolome LDL-C score) for every SNP.
+metabolome_v3:
+  results_subdir: v3
+  score:
+    model: ridge_cv
+    alphas_log10: [-2, 4, 25]     # np.logspace(-2, 4, 25)
+    folds: 5                      # family-grouped folds over all participants
+    seed: 3001
+    target: LDL
+  snps: all
+  total_effect_fdr: 0.05
+  indirect: bonferroni_over_entered
+  losing_min_prop_mediated: 0.5
+  losing_sensitivity_prop: [0.25]
+  gaining: opposite_sign_larger_direct
+  gaining_secondary: no_total_filter
+  sensitivity_exclude_super_pathway: [Lipid]
+
+# Corrected medication-adjusted LDL-C (scripts/make_corrected_ldl.py). Untreated: measured LDL-C. Treated
+# (LIPID_MED_baseline): Friedewald with adjusted TC, all in mg/dL: LDL = TC / tc_med_factor - HDL - TG / 5.
+outcome_correction:
+  mmol_to_mgdl_cholesterol: 38.67   # TC, HDL, LDL
+  mmol_to_mgdl_triglyceride: 88.57  # TG
+  tc_med_factor: 0.8                # TC_adj = TC / 0.8 for lipid-lowering medication
+
+# Share-based labels used in the manuscript (post hoc; specified after the pre-specified rank-based rules labelled no SNP).
+posthoc_v6:
+  results_subdir: v6
+  share: joint_over_sum            # per split S = I_joint / (I_joint + I_genomics); undefined if both 0 (no label)
+  sets:
+    primary: [anchor]              # GLGC p < 5e-8
+    secondary: [candidate]         # GLGC 5e-8 <= p < 0.05
+  losing_max_share: 0.333333       # split label losing: S < 1/3 (I_joint / I_genomics < 0.5)
+  gaining_min_share: 0.5           # split label gaining: S > 1/2 (I_joint / I_genomics > 1)
+  min_selection_fraction: 0.50     # eligible: pre-selected in >= 10 of 20 splits
+  stability_threshold: 0.70        # final label: same label in >= 70% of the splits where selected
+  sensitivity:
+    stability: [0.50]
+    losing_max_share: [0.428571]
+  models: [v2, v1]                 # first = primary
+
+# GWAS that selects the candidate SNPs (scripts/make_gwas_pheno.py, scripts/run_gwas.sh): corrected LDL-C in the
+# analysis participants, covariates sex, age, lipid medication and PC1-3; MAF >= 0.01; p <= 0.05; clumping r2 0.1 / 250 kb.
+gwas:
+  plink2: plink2
+  bgen: data/clsa_imp_{chr}_v3.bgen
+  sample: data/clsa_imp_v3.sample
+  pheno_original: data/gwas_pheno_LDL.txt    # FID IID LDL for the GWAS sample (LDL replaced by the corrected value)
+  covar: data/gwas_covariates.txt            # FID IID sex age LDL_med PC1 PC2 PC3
+  maf: 0.01
+  p_keep: 0.05
+  clump_p1: 0.05
+  clump_r2: 0.1
+  clump_kb: 250
+  out_dir: derived/gwas

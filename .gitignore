@@ -1,0 +1,33 @@
+# Individual-level and licensed inputs are never committed
+data/
+derived/
+annotation/
+
+# Outputs
+results/
+figures/
+tables/
+
+# Site-specific configuration (real paths)
+config.local.yaml
+config.*.local.yaml
+
+# Data files of any kind
+*.pkl
+*.npz
+*.npy
+*.csv
+*.tsv
+*.txt
+*.xlsx
+*.docx
+*.pdf
+*.png
+*.log
+
+# Python / editors
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+*.swp
+.DS_Store
